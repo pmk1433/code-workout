@@ -10,16 +10,29 @@
 // Read Sprockets README (https://github.com/sstephenson/sprockets#sprockets-directives) for details
 // about supported directives.
 //
+//= require modernizr
 //= require jquery
+//= require jquery-ui
 //= require jquery_ujs
+//= require bootstrap-sprockets
+//= require bootstrap-editable
+//= require bootstrap-editable-rails
 //= require js-routes
-
 //= require codemirror
 //= require codemirror/modes/clike
+//= require codemirror/modes/yaml
+//= require codemirror/modes/python
+//= require codemirror/modes/ruby
 //= require bootstrap-wysihtml5
-//= require bootstrap-modal
 //= require cocoon
-//= require_tree .
+//= require cm
+//= require jquery-readyselector
+//= require moment
+//= require bootstrap-datetimepicker
+//= require mustache.min
+//= require student_search
+//= require workout_form
+//= require flatpickr
 
 // Add the route helpers directly into the window object for easy access.
 $.extend(window, Routes);
@@ -58,7 +71,7 @@ function percentBar(filled, capacity, id) {
   gradient.addColorStop(0,"#3da2b4");
   gradient.addColorStop(1,"white");
 
-  text.textBaseline="middle"
+  text.textBaseline="middle";
   text.fillText("Text is here to stay",0,myCanvas.height/2);
 
   back.fillStyle="#000000";
@@ -67,5 +80,10 @@ function percentBar(filled, capacity, id) {
   back.fillRect(0,0,capW,h);
   back.fillStyle=gradient;
   back.fillRect(0,0,fillW,h);
-  
+
 }
+$.fn.editable.defaults.mode = 'inline';
+
+$(document).ready(function() {
+  $('.xeditable').editable();
+});

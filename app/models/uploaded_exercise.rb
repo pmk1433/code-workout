@@ -109,7 +109,7 @@ class UploadedExercise
           choice = Choice.new
           choice.answer = row[index]
           choice_num = index - COLUMN_CHOICE_A
-          choice.order = choice_num
+          choice.position = choice_num + 1
           if ans == choice_num
             choice.value = 100
           else
@@ -123,11 +123,11 @@ class UploadedExercise
           end
         end
       end
-      
-      #TODO get (exercise title, is_public, priority, experience, difficulty) not hardcoded
+
+      #TODO get (exercise name, is_public, priority, experience, difficulty) not hardcoded
       exercise.count_attempts = 0
       exercise.count_correct = 0
-      exercise.title = "Imported " + index
+      exercise.name = "Imported " + index
       exercise.is_public = true
       exercise.priority = 0
       exercise.experience = 100

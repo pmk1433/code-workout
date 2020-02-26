@@ -1,35 +1,67 @@
-%header.navbar.navbar-inverse.navbar-fixed-top
-  .navbar-inner
-    .container-fluid
-      = link_to 'CodeWorkout', root_path, class: 'brand'
-      %nav.nav-collapse.collapse
-        %ul.nav
-          %li= link_to 'The Gym', '/gym'
-          %li= link_to 'Your Achievements'
-          %li= link_to 'CS 1114', '#'
-        %ul.nav.pull-right
-          - if user_signed_in?
-            %li.hidden-phone
-              = link_to '#' do
-                %span.badge.badge-info 3
-                Alerts
-            - if current_user.global_role.can_edit_system_configuration?
-              %li.dropdown
-                %a.dropdown-toggle{ href: '#', data: { toggle: 'dropdown' } }
-                  %i.icon-wrench
-                  %i.icon-caret-down.hidden-phone
-                %ul.dropdown-menu
-                  %li.nav-header Manage
-                  %li= link_to icon_tag_for('user') + ' Users', users_path
-                  %li= link_to icon_tag_for('sitemap') + ' Organizations', organizations_path
-                  %li= link_to icon_tag_for('calendar') + ' Terms', terms_path
-                  %li= link_to icon_tag_for('book') + ' Courses', courses_path
-                  %li= link_to icon_tag_for('group') + ' Course offerings', course_offerings_path
-            %li= link_to current_user.email, current_user
+%header.navbar.yamm.navbar-inverse.navbar-fixed-top
+  .container-fluid
+    .navbar-header
+      = link_to 'CodeWorkout', root_path, class: 'navbar-brand'
+    .navbar-collapse.collapse
+      %ul.nav.navbar-nav.nav-top
+        %li.dropdown
+          %a.dropdown-toggle{ href: gym_url,
+            data: { toggle: 'dropdown' }, value: 'Gym' }
+            Gym
+          %ul.dropdown-menu
             %li
-              = link_to destroy_user_session_path, method: :delete do
-                %i.icon-signout
-          - else
-            %li= link_to 'Sign Up', new_user_registration_path
-            %li= link_to 'Sign In', new_user_session_path
-          
+              .yamm-content
+                -# %ul.list-unstyled
+                  %li
+                    %strong Workouts
+                  %li= link_to 'Browse all', workouts_path
+                  %li
+                    %strong Exercises
+                  %li= link_to 'Browse all', exercises_path
+                %ul.list-unstyled
+                  %li= link_to 'All workouts', workouts_path
+                  %li= link_to 'All exercises', exercises_path
+        %li.dropdown
+          %a.dropdown-toggle{ href: organizations_path,
+            data: { toggle: 'dropdown' }, value: 'Course' }
+            Course
+          - @active_courses = current_user.andand.course_offerings.andand.joins(:term).andand.where('terms.ends_on > (?)', DateTime.now)
+          %ul.dropdown-menu
+            %li
+              .yamm-content
+                %ul.list-unstyled
+                  %li
+                    %strong Courses
+                  - if user_signed_in?
+                    - @active_courses.each do |c|
+                      %li= link_to c.display_name_with_term,
+                        organization_course_path(c.course.organization, c.course, c.term)
+                    %li
+                      %strong= link_to 'Your older courses', organizations_path(enrolled_only: true)
+                  %li
+                    %strong= link_to 'Find a course', organizations_path
+
+      %ul.nav.navbar-nav.navbar-right.nav-top
+        %li= render :partial => 'exercises/search'
+        - if user_signed_in?
+          - if current_user.global_role.can_edit_system_configuration?
+            %li= link_to icon_tag_for('wrench'), admin_dashboard_path
+          %li= link_to current_user.email, current_user
+          %li
+            = link_to destroy_user_session_path, method: :delete do
+              %i.fa.fa-sign-out
+        - else
+          %li.dropdown
+            %a.dropdown-toggle{ href: '/signup',
+              data: { toggle: 'dropdown' }, value: 'Sign up' }
+              Sign Up
+            .dropdown-menu.auth
+              = render 'home/sign_up'
+          %li.dropdown
+            %a.dropdown-toggle{ href: '/signin',
+              data: { toggle: 'dropdown' }, value: 'Sign in' }
+              Sign in
+            .dropdown-menu.auth
+              = render 'home/sign_in'
+          -#%li= link_to 'Sign Up', new_user_registration_path
+          -#%li= link_to 'Sign In', new_user_session_path

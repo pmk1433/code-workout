@@ -1,3 +1,7 @@
+%ol.breadcrumb
+  %li= link_to 'Home', root_path
+  %li.active= 'Courses'
+  
 %h1 Courses
 
 %table.table.table-striped.table-bordered
@@ -12,14 +16,14 @@
   %tbody
     - @courses.each do |course|
       %tr
-        %td= course.name
+        %td=link_to course.name, course_path(course)
         %td= course.number
         %td= course.organization_id
-        %td= course.url_part
+        %td= course.slug
         %td
-          = button_link 'Show', course, btn: 'mini'
-          = button_link 'Edit', edit_course_path(course), btn: 'mini'
-          = button_link 'Destroy', course, method: :delete, btn: 'mini',  |
-            data: { confirm: 'Are you sure?' }                            |
+          = button_link 'Show', course, size: 'sm'
+          = button_link 'Edit', edit_course_path(course), size: 'sm'
+          = button_link 'Destroy', course, method: :delete, size: 'sm',
+            data: { confirm: 'Are you sure?' }
 
 = button_link 'New Course', new_course_path

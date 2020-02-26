@@ -12,12 +12,42 @@
 /db/*.sqlite3-journal
 
 # Ignore all logfiles and tempfiles.
-/log/*.log
+*.log
 /tmp
 .secret
-public/codemirror/test-language.txt
-test-language-advanced.txt
-test-language-examples.txt
-test-language-newlines.txt
-test-language.txt
-public/assets
+test-*.txt
+lib/assets/
+public/assets/
+**/.DS_Store
+usr/attempts/
+usr/resources/*/tests
+*.csv
+working.txt
+timezones.txt
+
+.vagrant
+/homeworks
+server.crt
+server.key
+
+# cache files for sublime text
+*.tmlanguage.cache
+*.tmPreferences.cache
+*.stTheme.cache
+
+# workspace files are user-specific
+*.sublime-workspace
+*.vscode
+
+# project files should be checked into the repository, unless a significant
+# proportion of contributors will probably not be using SublimeText
+# *.sublime-project
+tasks.todo
+
+.settings
+.byebug_history
+
+# ignore swap files
+*.swp
+*.swo
+/.idea/

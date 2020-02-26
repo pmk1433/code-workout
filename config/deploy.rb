@@ -4,14 +4,14 @@ set :repo_url, 'git://github.com/web-cat/code-workout.git'
 # ask :branch, proc { `git rev-parse --abbrev-ref HEAD`.chomp }
 
 set :deploy_to, '/home/codeworkout/rails'
-set :scm, :git
 
-set :format, :pretty
+set :format_options, truncate: false
 set :log_level, :debug
 set :pty, true
 
-set :linked_files, %w{config/database.yml}
-set :linked_dirs, %w{bin log tmp/pids tmp/cache tmp/sockets vendor/bundle public/system}
+set :linked_files,
+  %w{config/database.yml config/secrets.yml db/development.sqlite3}
+set :linked_dirs, %w{log usr tmp vendor/bundle public}
 
 # set :default_env, { path: "/opt/ruby/bin:$PATH" }
 # set :keep_releases, 5

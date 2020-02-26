@@ -1,5 +1,6 @@
 module ApplicationHelper
   include ActionView::Helpers::JavaScriptHelper
+  include ActionView::Helpers::UrlHelper
 
 
   # -------------------------------------------------------------
@@ -11,29 +12,77 @@ module ApplicationHelper
 
   # -------------------------------------------------------------
   def controller_stylesheet_link_tag
-    c = params[:controller]
-    stylesheet_link_tag c if Rails.application.assets.find_asset("#{c}.css")
+    c = params[:controller] || controller_name
+    stylesheet_link_tag c if (Rails.application.assets || ::Sprockets::Railtie.build_environment(Rails.application)).find_asset("#{c}.css")
   end
 
 
   # -------------------------------------------------------------
   def controller_javascript_include_tag
-    c = params[:controller]
-    javascript_include_tag c if Rails.application.assets.find_asset("#{c}.js")
+    c = params[:controller] || controller_name
+    javascript_include_tag c if (Rails.application.assets || ::Sprockets::Railtie.build_environment(Rails.application)).find_asset("#{c}.js")
+  end
+
+  # -------------------------------------------------------------
+  def dropdown_button_tag(*args, &block)
+    if block_given?
+      options = args.first || {}
+      dropdown_button_tag(capture(&block), options)
+    else
+      content = args.first
+      options = args.second || {}
+
+      if options[:class]
+        options[:class] += ' dropdown-toggle'
+      else
+        options[:class] = 'dropdown_toggle'
+      end
+
+      if options[:data]
+        options[:data][:toggle] = 'dropdown'
+      else
+        options[:data] = { toggle: 'dropdown' }
+      end
+
+      options[:href] = '#'
+
+      content_tag :a, options do
+        raw(content + ' <span class="caret"></span>'.html_safe)
+      end
+    end
+  end
+
+
+  # -------------------------------------------------------------
+  TEASER_LENGTH = 140
+  def teaser(text, length = TEASER_LENGTH)
+    if text.blank?
+      ""
+    else
+      truncate_html(markdown(text), length: length, omission: '...')
+    end
   end
 
 
   # -------------------------------------------------------------
   # Returns the correct twitter bootstrap class mapping for different
   # types of flash messages
-  # 
+  #
   FLASH_CLASS = {
-      success: 'alert-success',
-      error:   'alert-error',
-      alert:   'alert-block',
-      block:   'alert-block',
-      notice:  'alert-info',
-      info:    'alert-info'
+      success:     'alert-success',
+      'success' => 'alert-success',
+      error:       'alert-danger',
+      'error'   => 'alert-danger',
+      alert:       'alert-warning',
+      'alert'   => 'alert-warning',
+      block:       'alert-warning',
+      'block'   => 'alert-warning',
+      warning:     'alert-warning',
+      'warning' => 'alert-warning',
+      notice:      'alert-info',
+      'notice'  => 'alert-info',
+      info:        'alert-info',
+      'info'    => 'alert-info'
   }
   def flash_class_for(level)
     FLASH_CLASS[level] || level.to_s
@@ -43,12 +92,14 @@ module ApplicationHelper
   # -------------------------------------------------------------
   # Returns a FontAwesome icon name (without the prefix), if there
   # is one associated with the tag provided
-  # 
+  #
   ICON_NAME = {
       'success' => 'ok-sign',
       'error'   => 'exclamation-sign',
+      'danger'  => 'exclamation-sign',
       'alert'   => 'warning-sign',
       'block'   => 'warning-sign',
+      'warning' => 'warning-sign',
       'notice'  => 'info-sign',
       'info'    => 'info-sign',
 
@@ -69,13 +120,13 @@ module ApplicationHelper
   def icon_name_for(tag)
     if !tag.nil?
       tag = tag.to_s
-      if !tag.start_with?('icon-')
+      if !tag.start_with?('glyphicon-', 'fa-')
         tag = tag.downcase.sub(/[^a-zA-Z0-9_-].*$/, '')
         name = ICON_NAME[tag] || tag
         if name.nil?
           name
         else
-          'icon-' + name
+          'glyphicon-' + name
         end
       else
         tag
@@ -92,6 +143,11 @@ module ApplicationHelper
     if cls.nil?
       ''
     else
+      if cls.start_with?('glyphicon-')
+        cls = 'glyphicon ' + cls
+      elsif cls.start_with?('fa-')
+        cls = 'fa ' + cls
+      end
       if options[:class]
         cls = options[:class] + ' ' + cls
       else
@@ -125,40 +181,90 @@ module ApplicationHelper
 
 
   # -------------------------------------------------------------
+  def button_to_with_style(
+    name = nil, options = nil, html_options = nil, &block)
+    if !options
+      options = {}
+    elsif !options.is_a?(Hash)
+      html_options ||= {}
+    end
+    opts = html_options || options
+    opts[:class] = opts[:class] || 'btn'
+    if opts[:btn]
+      opts[:class] = opts[:class] + ' btn-' + opts.delete(:btn)
+    end
+    if opts[:size]
+      opts[:class] = opts[:class] + ' btn-' + opts.delete(:size)
+    end
+    if opts[:color]
+      opts[:class] = opts[:class] + ' btn-' + opts.delete(:color)
+    else
+      opts[:class] = opts[:class] + ' btn-default'
+    end
+    puts "options = #{options}"
+    puts "html_options = #{html_options}"
+    button_to_without_style(name, options, html_options, &block)
+  end
+  alias_method_chain :button_to, :style
+
+
+  # -------------------------------------------------------------
   # Creates a link styled as aBootstrap button.
   #
   def button_link(label, destination = '#', options = {})
     options[:class] = options[:class] || 'btn'
     if options[:btn]
-      options[:class] = options[:class] + ' btn-' + options[:btn]
-      options.delete(:btn)
+      options[:class] = options[:class] + ' btn-' + options.delete(:btn)
+    end
+    if options[:size]
+      options[:class] = options[:class] + ' btn-' + options.delete(:size)
+    end
+    if options[:color]
+      options[:class] = options[:class] + ' btn-' + options.delete(:color)
+    else
+      options[:class] = options[:class] + ' btn-default'
     end
     text = label
-    icon = options[:icon] ||= label
-    if !icon.nil?
-      text = icon_tag_for(icon) + ' ' + text
+    if options[:icon]
+      text = icon_tag_for(options[:icon]) + ' ' + text
     end
-    link_to text, destination, options       
+    link_to text, destination, options
   end
+
+
   # -------------------------------------------------------------
   # Creates a difficulty belt image.
   #
-  BELT_COLOR = ["White", "Yellow", "Orange", "Green", "Blue", "Violet", "Brown", "Black"]
+  BELT_COLOR = ['White', 'Yellow', 'Orange', 'Green', 'Blue', 'Violet',
+    'Brown', 'Black']
   def difficulty_image(val)
     levels = 8
     increments = 100.0/8
-    if( val <= 0 )
+    if val <= 0
       num = 1
-    elsif( val > 100)
+    elsif val > 100
       num = 8
     else
-      num = val/(increments).round
+      num = val / (increments).round
     end
-    if( num == 0 )
-      color = "White"
+    if num == 0
+      color = 'White'
     else
       color = BELT_COLOR[num]
     end
-    image_tag("belt"+num.to_s+".png", alt: color.to_s+" Belt ("+val.to_s+")")
+    image_tag('belt' + num.to_s + '.png',
+      alt: color.to_s + ' Belt (' + val.to_s + ')',
+      class: 'difficulty')
   end
+
+
+  # -------------------------------------------------------------
+  def n_to_s(val)
+    if val == val.to_i
+      val.to_i.to_s
+    else
+      val.round(1).to_s
+    end
+  end
+
 end

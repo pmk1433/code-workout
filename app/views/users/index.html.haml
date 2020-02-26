@@ -3,7 +3,7 @@
 %table.table.table-striped.table-bordered
   %thead
     %tr
-      %th Gravatar
+      %th Image
       %th Last name
       %th First name
       %th Email
@@ -18,9 +18,8 @@
     - else
       = render @users
 
-- unless @users.empty?
-  #users_paginator
-    = paginate @users, remote: true
+- if @users.is_a?(Array)
+  #users_paginator= paginate @users, remote: true
 
 - if can? :manage, User
   = button_link 'New User', new_user_path

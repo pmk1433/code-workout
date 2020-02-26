@@ -1,26 +1,21 @@
 .nested-fields
   = f.inputs do
-    .row-fluid.darker-bkg
-      .row-fluid
-        .span3
-          = f.input :term, :as => :select, :include_blank => false,
+    .row.darker-bkg
+      .row
+        .col-md-3
+          = f.input :term, as: :select, :include_blank => false,
               :label => "Term",
               :collection => Term.all
-        .span8
-          = f.input :self_enrollment_allowed, :as => :boolean, 
+        .col-md-8
+          = f.input :self_enrollment_allowed, as: :boolean, 
             :label => "Self enrollment allowed",
             :input_html => { :checked => true }
-      .row-fluid
-        .span3
-          = f.input :name, :as => :string,
-            placeholder: "#12345",
-            :input_html => { :class => 'span12', :rows =>1 }
-        .span3
-          = f.input :label, :as => :string, :required => false,
+        .col-md-3
+          = f.input :label, as: :string, required: false,
             placeholder: "MWF 9am",
-            :input_html => { :class => 'span12', :rows =>1 }
-      .row-fluid
-        .span6
-          = f.input :url, :as => :string, :required => false,
+            :input_html => { class: 'span12', rows: 1 }
+      .row
+        .col-md-6
+          = f.input :url, as: :string, required: false,
             placeholder: "http://www.school.edu/course",
-            :input_html => { :class => 'span12', :rows =>1 }    
+            input_html: { class: 'span12', rows: 1 }    

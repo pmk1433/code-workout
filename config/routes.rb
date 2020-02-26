@@ -1,58 +1,196 @@
 CodeWorkout::Application.routes.draw do
 
-  
+  root 'home#index'
 
-  resources :workouts
+  post 'lti/launch', as: :lti_launch # => 'workout_offerings#practice', as: :lti_workout_offering_practice
 
-  root 'static_pages#home'
+  post 'lti/assessment'
 
-  get "static_pages/home"
-  get "static_pages/help"
-  get "static_pages/mockup1"
-  get "static_pages/mockup2"
-  get "static_pages/mockup3"
+  get 'home' => 'home#index'
+  get 'main' => 'home#index'
+  get 'home/about'
+  get 'home/license'
+  get 'home/contact'
+  get 'home/new_course_modal', as: :new_course_modal
+  get 'home/python_ruby_modal', as: :python_ruby_modal
 
-  resources :exercises
-  resources :choices
-  resources :stems
-  resources :course_offerings
-  resources :terms
-  resources :courses
-  resources :organizations
-  resources :languages  
-  resources :tags  
-  resources :course_enrollments
-  resources :course_roles
-  resources :global_roles
-  resources :course_enrollments
-  resources :course_roles
-  resources :users
-  resources :about
-  resources :license
-  resources :contact
+  # routes anchored at /admin
+  # First, we have to override some of the ActiveAdmin auto-generated
+  # routes, since our user ids and file ids use restricted characters
+  get '/admin/users/:id/edit(.:format)' => 'admin/users#edit',
+    constraints: { id: /[^\/]+/ }
+  get '/admin/users/:id' => 'admin/users#show',
+    constraints: { id: /[^\/]+/ }
+  patch '/admin/users/:id' => 'admin/users#update',
+    constraints: { id: /[^\/]+/ }
+  put '/admin/users/:id' => 'admin/users#update',
+    constraints: { id: /[^\/]+/ }
+  delete '/admin/users/:id' => 'admin/users#destroy',
+    constraints: { id: /[^\/]+/ }
+  ActiveAdmin.routes(self)
 
-  devise_for :users, :skip => [:registrations, :sessions]
-  as :user do
-    get "/signup" => "devise/registrations#new", as: :new_user_registration
-    get "/about" => "devise/about#new", as: :about_page
-    get "/license" => "devise/license#new", as: :license_page
-    get "/contact" => "devise/contact#new", as: :contact_page
-    
-    post "/signup" => "devise/registrations#create", as: :user_registration
-    get "/login" => "devise/sessions#new", as: :new_user_session
-    post "/login" => "devise/sessions#create", as: :user_session
-    delete "/logout" => "devise/sessions#destroy", as: :destroy_user_session
-    get '/practice/:id' => 'exercises#practice', as: :practice
-    patch '/practice/:id' => 'exercises#evaluate', as: :evaluate
-    get '/users/:id/performance' => 'users#calc_performance', as: :calc_performance
-    post '/exercises/search' => 'exercises#search', as: :search
-    get '/gym' => 'workouts#gym', as: :gym
+
+  get 'sse/feedback_wait'
+  get 'sse/feedback_update'
+  get 'sse/feedback_poll'
+  post '/course_offerings/:id/upload_roster' => 'course_offerings#upload_roster'
+
+  get '/request_extension' => 'workout_offerings#request_extension'
+  post '/add_extension' => 'workout_offerings#add_extension'
+
+  # All of the routes anchored at /gym
+  scope :gym do
+    # The top-level gym route
+    get '/' => 'workouts#gym', as: :gym
+
+    # /gym/exercises ...
+    get 'exercises/call_open_pop' => 'exercises#call_open_pop'
+    get  'exercises_import' => 'exercises#upload_yaml'
+    post  'exercises_yaml_create' => 'exercises#yaml_create'
+    get  'exercises/upload' => 'exercises#upload', as: :exercises_upload
+    get  'exercises/download' => 'exercises#download', as: :exercises_download
+    post 'exercises/upload_create' => 'exercises#upload_create'
+    get  'exercises/upload_mcqs' => 'exercises#upload_mcqs',
+      as: :exercises_upload_mcqs
+    post 'exercises/create_mcqs' => 'exercises#create_mcqs'
+    get  '/exercises/any' => 'exercises#random_exercise',
+      as: :random_exercise
+    get 'exercises/:id/practice' => 'exercises#practice',
+      as: :exercise_practice
+    patch 'exercises/:id/practice' => 'exercises#evaluate',
+      as: :exercise_evaluate
+		get 'exercises/:id/embed' => 'exercises#embed', as: :exercise_embed
+    post 'exercises/search' => 'exercises#search', as: :exercises_search
+    get 'exercises/query_data' => 'exercises#query_data',
+      as: :exercises_query_data
+    get 'exercises/:id/download_attempt_data' =>
+      'exercises#download_attempt_data', as: :download_exercise_attempt_data
+    # At the bottom, so the routes above take precedence over existing ids
+    resources :exercises
+
+    # /gym/workouts ...
+    get  'workouts/embed(/:workout_id)' => 'workouts#embed', as: :workout_embed
+    get  'workouts/download' => 'workouts#download'
+    get  'workouts/:id/add_exercises' => 'workouts#add_exercises'
+    post 'workouts/link_exercises'  => 'workouts#link_exercises'
+    get  'workouts/new_with_search/:searchkey'  => 'workouts#new_with_search',
+      as: :workouts_with_search
+    post 'workouts/new_with_search'  => 'workouts#new_with_search',
+      as: :workouts_exercise_search
+    get 'workouts/new_or_existing' => 'workouts#new_or_existing', as: :new_or_existing_workout
+    get 'workouts/new' => 'workouts#new', as: :new_workout
+    get 'workouts/:id/edit' => 'workouts#edit', as: :edit_workout
+    get 'workouts/:id/clone' => 'workouts#clone', as: :clone_workout
+    get  'workouts/:id/practice' => 'workouts#practice',
+      as: :practice_workout
+    get  'workouts/:id/evaluate' => 'workouts#evaluate', as: :workout_evaluate
+    get  'workouts_dummy' => 'workouts#dummy'
+    get  'workouts_import' => 'workouts#upload_yaml'
+    post  'workouts_yaml_create' => 'workouts#yaml_create'
+    post 'workouts/search' => 'workouts#search', as: :workouts_search
+    get 'workouts/:id/download_attempt_data' =>
+      'workouts#download_attempt_data', as: :download_workout_attempt_data
+    # At the bottom, so the routes above take precedence over existing ids
+    resources :workouts, except: [ :new, :edit ]
   end
 
-  match 'course_offering/:course_offering_id/upload_roster/:action',
-    controller: 'upload_roster', as: 'upload_roster', via: [:get, :post]
+  # All of the routes anchored at /courses
+  resources :organizations, only: [ :index, :show ], path: '/courses' do
+    get 'search' => 'courses#search', as: :courses_search
+    post 'find' => 'courses#find', as: :course_find
+    get 'new' => 'courses#new'
+    get ':id/request_privileged_access/:requester_id' => 'courses#request_privileged_access',
+      as: :request_privileged_access
+    post 'create' => 'courses#create', as: :courses_create
+    get ':id/edit' => 'courses#edit', as: :course_edit
+    get ':id/privileged_users' => 'courses#privileged_users', as: :course_privileged_users
+    get ':course_id/new_offering' => 'course_offerings#new', as: :new_course_offering
+    post ':course_id/create_offering' => 'course_offerings#create', as: :course_offering_create
+    get ':course_id/:term_id/tab_content/:tab' => 'courses#tab_content'
+    get ':course_id/:term_id/workouts/new' => 'workouts#new', as: :new_workout
+    get ':course_id/:term_id/workouts/:workout_id/clone' => 'workouts#clone', as: :clone_workout
+    get ':course_id/:term_id/workouts/new_or_existing' => 'workouts#new_or_existing', as: :new_or_existing_workout
+    get ':course_id/:term_id/:workout_offering_id/edit_workout' => 'workouts#edit', as: :edit_workout
+    get ':course_id/:term_id/:id/practice(/:exercise_id)' => 'workout_offerings#practice', as: :workout_offering_practice
+    get ':course_id/:term_id/find_offering/:workout_name' => 'workouts#find_offering', as: :find_workout_offering
+    get ':course_id/:term_id/:workout_offering_id/:id' => 'exercises#practice', as: :workout_offering_exercise
+    patch ':course_id/:term_id/:workout_offering_id/:id' => 'exercises#evaluate', as: :workout_offering_exercise_evaluate
+    get ':course_id/:term_id/:workout_offering_id/review/:review_user_id/:id' => 'exercises#practice', as: :workout_offering_exercise_review
+    get ':course_id/:term_id/:id' => 'workout_offerings#show', as: :workout_offering
+    get ':course_id/:term_id/review/:review_user_id/:id' => 'workout_offerings#review', as: :workout_offering_review
+    post ':id/:term_id/generate_gradebook/' => 'courses#generate_gradebook', as: :course_gradebook
+    get ':id(/:term_id)' => 'courses#show', as: :course
+  end
+
+  # Organization routes, separate from courses
+  resources :organizations, only: :create do
+    collection do
+      get 'new_or_existing'
+      get 'search'
+      get 'abbr_suggestion'
+    end
+  end
+
+  resources :course_offerings, only: [ :edit, :update, :index, :show ] do
+    post 'enroll' => :enroll, as: :enroll
+    delete 'unenroll' => :unenroll, as: :unenroll
+    match 'upload_roster/:action', controller: 'upload_roster',
+      as: :upload_roster, via: [:get, :post]
+    post 'generate_gradebook' => :generate_gradebook, as: :gradebook
+    post 'add_workout/:workout_name' => 'course_offerings#add_workout', as: :add_workout
+    post 'store_workout/:id' => :store_workout, as: :store_workout
+    get '/search_enrolled_users' => :search_enrolled_users, as: :search_enrolled_users
+    collection do
+      post 'remote_create' => :remote_create, as: :remote_create
+    end
+  end
+
+  resources :course_enrollments, only: [ :new, :destroy ] do
+    collection do
+      get 'choose_roster'
+      post 'roster_upload'
+    end
+  end
+
+  resources :user_groups, only: [ :new ] do
+    get 'members' => 'user_groups#members', as: :members
+    get 'review_access_request/:requester_id/:user_id' => 'user_groups#review_access_request', as: :review_access_request
+    post 'review_access_request/:requester_id/:user_id' => 'user_groups#review_access_request', as: :decide_access_request
+    post 'add_user/:user_id' => 'user_groups#add_user', as: :add_user
+  end
+
+  # All of the routes anchored at /users
+  resources :users, constraints: { id: /[^\/]+/ } do
+    resources :resource_files, path: 'media',
+      constraints: { id: /[^\/]+/ }
+    # This route is broken, since there is no such method
+    # post 'resource_files/uploadFile' => 'resource_files#uploadFile'
+    get 'performance' => :calc_performance, as: :calc_performance
+  end
+
+  #OmniAuth for Facebook
+  devise_for :users,
+    controllers: { omniauth_callbacks: 'users/omniauth_callbacks', registrations: 'registrations' },
+    skip: [:registrations, :sessions] # skipping these because routes are being defined below
+  as :user do
+    get '/new_password' => 'devise/passwords#new', as: :new_password
+    get '/edit_password' => 'devise/passwords#edit', as: :edit_password
+    put '/update_password' => 'devise/passwords#update', as: :update_password
+    post '/create_password' => 'devise/passwords#create', as: :create_password
+    get '/signup' => 'devise/registrations#new', as: :new_user_registration
+    post '/signup' => 'devise/registrations#create', as: :user_registration
+    # use the overridden login action
+    get '/login' => 'users/sessions#new', as: :new_user_session
+    post '/login' => 'devise/sessions#create', as: :user_session
+    delete '/logout' => 'devise/sessions#destroy', as: :destroy_user_session
+  end
+
+  get 'help' => 'help#index'
+  match 'help/:action', to: 'help', via: [:get]
+  match 'static_pages/:action', controller: 'static_pages', via: [:get]
 
 end
+
 #== Route Map
 =begin
  Prefix Verb   URI Pattern                            Controller#Action

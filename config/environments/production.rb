@@ -20,7 +20,7 @@ CodeWorkout::Application.configure do
   # config.action_dispatch.rack_cache = true
 
   # Disable Rails's static asset server (Apache or nginx will already do this).
-  config.serve_static_assets = false
+  config.serve_static_files = false
 
   # Compress JavaScripts and CSS.
   config.assets.js_compressor = :uglifier
@@ -43,7 +43,7 @@ CodeWorkout::Application.configure do
   # config.force_ssl = true
 
   # Set to :debug to see everything in the log.
-  config.log_level = :warn
+  config.log_level = :info
 
   config.log_formatter = proc do |severity, datetime, progname, msg|
     if severity == 'DEBUG' && msg.blank?
@@ -87,6 +87,6 @@ CodeWorkout::Application.configure do
   # Disable automatic flushing of the log to improve performance.
   # config.autoflush_log = false
 
-  config.action_mailer.default_url_options = { :host => 'http://codeworks.org/' }
-
+  config.action_mailer.default_url_options = { :host => 'http://codeworkout.cs.vt.edu/' }
+  config.middleware.use LogFile::Display
 end

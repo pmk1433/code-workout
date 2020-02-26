@@ -1,229 +1,528 @@
-#table/schema migration for exercise........................
+# == Schema Information
 #
-#create_table "exercises", force: true do |t|
-#    t.integer  "user_id",            null: false
-#    t.integer  "stem_id"
-#    t.integer  "language_id"
-#    t.string   "title",              null: false
-#    t.text     "question",           null: false
-#    t.text     "feedback"
-#    t.boolean  "is_public",          null: false
-#    t.integer  "priority",           null: false
-#    t.integer  "count_attempts",     null: false
-#    t.float    "count_correct",      null: false
-#    t.float    "difficulty",         null: false
-#    t.float    "discrimination",     null: false
-#    t.integer  "question_type",      null: false
-#    t.boolean  "mcq_allow_multiple"
-#    t.boolean  "mcq_is_scrambled"
-#    t.datetime "created_at"
-#    t.datetime "updated_at"
-#    t.integer  "experience"
-#  end
+# Table name: exercises
+#
+#  id                     :integer          not null, primary key
+#  question_type          :integer          not null
+#  current_version_id     :integer
+#  created_at             :datetime
+#  updated_at             :datetime
+#  versions               :integer
+#  exercise_family_id     :integer
+#  name                   :string(255)
+#  is_public              :boolean          default(FALSE), not null
+#  experience             :integer          not null
+#  irt_data_id            :integer
+#  external_id            :string(255)
+#  exercise_collection_id :integer
+#
+# Indexes
+#
+#  exercises_irt_data_id_fk                   (irt_data_id)
+#  index_exercises_on_current_version_id      (current_version_id)
+#  index_exercises_on_exercise_collection_id  (exercise_collection_id)
+#  index_exercises_on_exercise_family_id      (exercise_family_id)
+#  index_exercises_on_external_id             (external_id) UNIQUE
+#  index_exercises_on_is_public               (is_public)
+#
 
-require "cgi"
-
+# =============================================================================
+# Represents a single exercise (question) that a student (or any user) can
+# answer.  An exercise may include introductory text (a stem), and one
+# or more prompts.  The prompts represent the "parts" of the question, which
+# are presented in sequential order (never randomized, since they often
+# follow a logical progression).
+#
+# Many simple questions contain only one prompt, which is the most common
+# case.  However, a multi-part question (say, a question that has a), b), and
+# c) subparts) is simply one exercise with multiple prompts (three, in
+# this example).
+#
+# As exercises are edited over time, the edit history is maintained as
+# a series of ExerciseVersion objects.  When a user answers an exercise,
+# their attempt is associated with the specific ExerciseVersion that was
+# in effect when they gave their answer.  New users seeing an exercise
+# for the first time always see the newest version.
+#
 class Exercise < ActiveRecord::Base
 
   #~ Relationships ............................................................
 
-  belongs_to  :user
-  belongs_to  :stem
-  #belongs_to  :language #language is now a tag with tagtype=2
+  acts_as_taggable_on :tags, :languages, :styles
+  has_many :exercise_versions, -> { order('version DESC') },
+    inverse_of: :exercise, dependent: :destroy
+  has_many :attempts, through: :exercise_versions
+  has_many :course_exercises, inverse_of: :exercise, dependent: :destroy
+  has_many :courses, through: :course_exercises
+  has_many :exercise_workouts, inverse_of: :exercise, dependent: :destroy
+  has_many :workouts, through: :exercise_workouts
+  belongs_to :exercise_family, inverse_of: :exercises
+  has_many :exercise_owners, inverse_of: :exercise, dependent: :destroy
+  has_many :owners, through: :exercise_owners
+  belongs_to :current_version, class_name: 'ExerciseVersion'
+  belongs_to :irt_data, dependent: :destroy
+  belongs_to :exercise_collection
 
-  has_and_belongs_to_many :tags
-  has_and_belongs_to_many :workouts
-  has_many :exercises_tags
-  has_many :choices
-  has_many :attempts
-  accepts_nested_attributes_for :attempts
-  accepts_nested_attributes_for :choices, :allow_destroy => true
-  accepts_nested_attributes_for :tags, :allow_destroy => true
-  
-  
+  accepts_nested_attributes_for :exercise_versions, allow_destroy: true
+
   #~ Hooks ....................................................................
+
   before_validation :set_defaults
+
+
   #~ Validation ...............................................................
+  validates :name, presence: :true
+  validates :question_type, presence: true, numericality: { greater_than: 0 }
+  validates :experience, presence: true,
+    numericality: { greater_than_or_equal_to: 0 }
 
-  #validates :user, presence: true
-  validates :title,
-    length: {:minimum => 1, :maximum => 50},
-    format: {
-      with: /[a-zA-Z0-9\-_ .]+/,
-      message: 'Title must be 50 characters or less and consist only of ' \
-        'letters, digits, hyphens (-), underscores (_), spaces ( ), and ' \
-        'periods (.).'
-    }
-  validates :question, presence: true
-  validates :is_public, presence: true
-  validates :priority, presence: true, numericality: true
-  validates :count_attempts, presence: true, numericality: true
-  validates :count_correct, presence: true, numericality: true
-  validates :experience, presence: true, numericality: true
-  validates :difficulty, presence: true, numericality: true
-  validates :discrimination, presence: true, numericality: true
-  validates :question_type, presence: true, numericality: true
+  # This one might be needed, but might break the create path for
+  # exercises, so I'm leaving it out for now:
+  # validates :current_version, presence: true
 
+  Q_MC     = 1
+  Q_CODING = 2
+  Q_BLANKS = 3
 
-  TYPES = {
-    'Multiple Choice Question' => 1
+  TYPE_NAMES = {
+    Q_MC     => 'Multiple Choice Question',
+    Q_CODING => 'Coding Question',
+    Q_BLANKS => 'Fill in the blanks'
   }
 
-  TEASER_LENGTH = 40
+  LANGUAGE_EXTENSION = {
+    'Ruby' => 'rb',
+    'Java' => 'java',
+    'Python' => 'py',
+    'Shell' => 'sh',
+    'C++' => 'cpp'
+  }
+
+
+  scope :visible_through_user, -> (u) { joins{exercise_owners.outer}.joins{exercise_collection.outer}.
+    where{ (exercise_owners.owner == u) | (exercise_collection.user == u) } }
+
 
   #~ Class methods ............................................................
-  def self.search(terms)
-    term_array = terms.split
-    term_array.each do |term|
-      term = "%" + term + "%"
+
+  # -------------------------------------------------------------
+  def self.search(terms, user = nil)
+    # first, turn all ids of the form X4 to just the number
+    ids = []
+    terms = terms.map{ |t| Regexp.escape(t) }
+    terms.each do |t|
+      if t =~ /^[x]\d+$/i
+        ids.append t[1..-1]
+      end
     end
-    return Exercise.joins(:tags).where{tags.tag_name.like_any term_array}
+    r = terms.join("|")
+    if r.blank?
+      return nil
+    end
+    if user
+      visible = Exercise.visible_to_user(user)
+      result = visible.tagged_with(terms, any: true, wild: true, on: :tags) +
+        visible.tagged_with(terms, any: true, wild: true, on: :languages) +
+        visible.tagged_with(terms, any: true, wild: true, on: :styles) +
+        visible.where('(name regexp (?)) or (exercises.id in (?))', r, ids)
+      return result.uniq
+    else
+      visible = Exercise.publicly_visible
+      result = visible.tagged_with(terms, any: true, wild: true, on: :tags) +
+        visible.tagged_with(terms, any: true, wild: true, on: :languages) +
+        visible.tagged_with(terms, any: true, wild: true, on: :styles) +
+        visible.where('(name regexp (?)) or (exercises.id in (?))', r, ids)
+      return result.uniq
+    end
   end
 
-  def self.type_mc
-    TYPES['Multiple Choice Question']
+
+  # -------------------------------------------------------------
+  # Get a list of Exercises that are visible to the specified user.
+  #
+  # It is the union of exercises that are publicly visible, created or owned by the user,
+  # part of an exercise collection owned by the user or by a group the user is a
+  # member of, and exercises that are visible through a course_offering.
+  def self.visible_to_user(user)
+    # If updating this method, remember to update the instance method
+    # exercise.visible_to?(user).
+
+    # Get exercises owned or created by the user
+    visible_through_user = Exercise.visible_through_user(user)
+
+    publicly_visible = Exercise.publicly_visible
+
+    visible_through_course_offering = Exercise.joins(
+      exercise_collection: [ course_offering: :course_enrollments ])
+      .where(exercise_collection:
+        { course_offering:
+          { course_enrollments:
+            { user: user } } }
+      )
+
+    visible_through_user_group = Exercise.visible_through_user_group(user)
+
+    return visible_through_user
+      .union(publicly_visible)
+      .union(visible_through_course_offering)
+      .union(visible_through_user_group)
   end
+
+
+  # -------------------------------------------------------------
+  # Get exercises that are publicly visible, either by the Exercise.is_public
+  # property, or by the license assigned to the Exercise's collection.
+  #
+  # Also the list of exercises that can be seen/searched/practiced without being
+  # signed in.
+  def self.publicly_visible
+    public_license = Exercise.joins(
+      exercise_collection: [ license: :license_policy ])
+      .where(is_public: nil, exercise_collection:
+        { license:
+          { license_policy:
+            { is_public: true } } }
+      )
+
+    public_exercise = Exercise.where(is_public: true)
+
+    return public_exercise.union(public_license)
+  end
+
+
+  # -------------------------------------------------------------
+  def self.visible_through_user_group(user)
+    Exercise.joins(exercise_collection: [ user_group: :memberships ])
+      .where(exercise_collection:
+        { user_group:
+          { memberships:
+            { user: user } } }
+      )
+  end
+
+
+  # -------------------------------------------------------------
+  # return the extension of a given language
+  # FIXME: This doesn't belong in this class and should be moved elsewhere
+  #
+  def self.extension_of(lang)
+    LANGUAGE_EXTENSION[lang]
+  end
+
 
   #~ Public instance methods ..................................................
-  def serve_choice_array
-    if self.choices.nil?
-      return ["No answers available"]
-    else
-      answers = Array.new
-      raw = self.choices.sort_by{|a| a[:order]}
-      raw.each do |c|
-        formatted = c
-        formatted[:answer] = make_html(c[:answer])
-        answers.push( formatted )
-      end
-      if self.mcq_is_scrambled
-        scrambled = Array.new
-        until answers.empty?
-          rand = Random.rand(answers.length)
-          scrambled.push(answers.delete_at(rand))
-        end
-        answers = scrambled
-      end
-      return answers
-    end
-  end
 
-  def teaser_text
-    plain = ActionController::Base.helpers.strip_tags(make_html(self.question))
-    if( plain.size < TEASER_LENGTH )
-      return plain
-    else
-      shorten = plain[0..TEASER_LENGTH]
-      space = shorten.rindex(/\s/)
-      if space.nil?
-        shorten = shorten.to_s+"..."
-      else
-        shorten = shorten[0..space].to_s+"..."
-      end
-      return shorten
-    end
-  end
-
-  def select_many?
-    self.mcq_allow_multiple
-  end
-
+  # -------------------------------------------------------------
   def type_name
-    Exercise.type_name(self.question_type)
+    TYPE_NAMES[self.question_type]
   end
 
-  def serve_question_html
-    source = ""
-    if stem
-      source = stem.preamble
-    end
-    source = source + "<br>" + question
-    return make_html(source)
+
+
+  # -------------------------------------------------------------
+  def is_mcq?
+    self.question_type == Q_MC
   end
 
-  def score(answered)
-    score = 0
-    answered.each do |a|
-      score = score + a.value
-    end
-    if( score < 0 )
-      score = 0
-    end
-    return score
+
+  # -------------------------------------------------------------
+  def is_coding?
+    self.question_type == Q_CODING
   end
 
-  
-  #~Grab all feedback for choices either selected when wrong 
-  #  or not selected when (at least partially) right
-  def collate_feedback(answered)
-    total = score(answered)
-    feed = Array.new
-    all = self.choices.sort_by{|a| a[:order]}
-    all.each do |choice|
-      found = answered.select {|x| x["id"] == choice.id}
-      if( (choice.value > 0 && (found.nil? || found.empty?) ) ||
-          ( choice.value <= 0 && (!found.nil? && !found.empty?) ) )
-        feed.push( make_html(choice.feedback) )
-      end
-    end
-    #if 100% correct, or no other feedback provided, give general feedback
-    if( feed.empty? || total>= 100 && (!self.feedback.nil? && !self.feedback.empty?) )
-      feed.push(self.feedback)
-    end
-    return feed
+
+  # -------------------------------------------------------------
+  def is_fill_in_the_blanks?
+    self.question_type == Q_BLANKS
   end
 
-  def experience_on(answered,attempt)
-    total = score(answered)
-    options = self.choices.size
 
-    if( options == 0 || attempt == 0)
-      return 0
-    elsif( total >= 100 && attempt == 1 )
-      return self.experience
-    elsif( attempt >= options )
-      return 0
-    elsif( total >= 100 )
-      return self.experience - self.experience * (attempt-1)/options
-    else
-      return self.experience / options / 4
-    end
-  end
-
-  def make_html(unescaped)
-    return CGI::unescapeHTML(unescaped.to_s).html_safe
-  end
-
-  #getter override for title
-  def title
-    temp = "X"+read_attribute(:id).to_s
-    if not read_attribute(:title).nil? 
-      temp += ": " + read_attribute(:title).to_s
-    elsif( !self.tags.nil? && !self.tags.first.nil? )
-      temp += ": " + self.tags.first.tag_name
+  # -------------------------------------------------------------
+  # getter override for name
+  def display_name
+    temp = display_number
+    if !name.blank?
+      temp += ': ' + name
     end
     return temp
   end
 
-  private
-  def self.type_name(type_num)
-    if( type_num.nil? || type_num <= 0 || type_num > TYPES.size )
-      return ""
+
+  # -------------------------------------------------------------
+  # getter override for name
+  def display_number
+    'X' + id.to_s
+  end
+
+
+  # -------------------------------------------------------------
+  # Determine the programming language of the exercise from its language tag
+  def language
+    tag = self.languages.first
+    return tag ? tag.name : nil
+  end
+
+
+  # -------------------------------------------------------------
+  # return true if user has attempted this exercise version or not.
+  def user_attempted?(u_id)
+    self.attempts.where(user_id: u_id).any?
+  end
+
+  # Does the user own this exercise or its collection?
+  # Through themselves or through a user group?
+  def owned_by?(u)
+    return self.owners.include?(u) ||
+      self.exercise_collection.andand.owned_by?(u) ||
+      u.is_a_member_of?(self.exercise_collection.andand.user_group)
+  end
+
+  # -------------------------------------------------------------
+  def visible_to?(u)
+    # If updating this instance method, remember to update the class method
+    # Exercise.visible_to_user(u). This method exists so avoid creating a list
+    # of visible exercises unnecessarily.
+    self.is_publicly_available? ||
+    self.owners.include?(u) ||
+    u.is_a_member_of?(self.exercise_collection.andand.user_group) ||
+    self.exercise_collection.andand.owned_by?(u)
+  end
+
+  def is_publicly_available?
+    unless self.is_public.nil?
+      self.is_public
     else
-      return TYPES.rassoc(type_num).first
+      self.is_public ||
+        self.exercise_collection.andand.is_public?
     end
   end
 
+  def progsnap2_attempt_csv
+    denormalized = self.denormalized_attempt_data
+    main_events = progsnap2_main_events_csv(denormalized)
+    code_states = progsnap2_code_states_csv(denormalized)
+    return main_events, code_states
+  end
+
+  def denormalized_attempt_csv
+    denormalized_data = self.denormalized_attempt_data
+    exercise_attributes = %w{ exercise_id exercise_name }
+    attempt_attributes = %w{
+      user_id
+      exercise_version_id
+      version_no
+      answer_id
+      answer
+      error
+      attempt_id
+      submit_time
+      submit_num
+      score
+      active_score_id
+      workout_score_id
+      workout_score
+      workout_offering_id
+      workout_id
+      workout_name
+      course_offering_id
+      course_number
+      course_name
+      term }
+
+    data = CSV.generate(headers: true) do |csv|
+      csv << (exercise_attributes + attempt_attributes)
+      denormalized_data.each do |submission|
+        csv << ([ self.id, self.name ] +
+          attempt_attributes.map { |a| submission.attributes[a] })
+      end
+    end
+    return data
+  end
+
+  # Return denormalized attempt data for this exercise.
+  # All relationship fields are in the same table, so null values
+  # are possible for workout_id, workout_offering_id, course_id,
+  # course_offering_id, etc.
+  def denormalized_attempt_data(workout_id = nil)
+    result = exercise_versions.joins{ attempts.prompt_answers }
+      .joins('LEFT JOIN workout_scores ON
+        workout_scores.id = attempts.workout_score_id')
+      .joins('LEFT JOIN workout_offerings ON
+        workout_offerings.id = workout_scores.workout_offering_id')
+      .joins('LEFT JOIN workouts ON workouts.id = workout_scores.workout_id')
+      .joins('LEFT JOIN course_offerings ON
+        course_offerings.id = workout_offerings.course_offering_id')
+      .joins('LEFT JOIN terms ON terms.id = course_offerings.term_id')
+      .joins('LEFT JOIN courses ON courses.id = course_offerings.course_id')
+      .joins('LEFT JOIN coding_prompt_answers ON
+        prompt_answers.actable_id = coding_prompt_answers.id')
+      .select('attempts.user_id,
+        exercise_versions.id as exercise_version_id,
+        exercise_versions.version as version_no,
+        coding_prompt_answers.id as answer_id,
+        coding_prompt_answers.answer,
+        coding_prompt_answers.error,
+        attempts.id as attempt_id,
+        attempts.submit_time,
+        attempts.submit_num,
+        attempts.score,
+        attempts.active_score_id,
+        workout_scores.id as workout_score_id,
+        workout_scores.score as workout_score,
+        workout_offerings.id as workout_offering_id,
+        workouts.id as workout_id,
+        workouts.name as workout_name,
+        course_offerings.id as course_offering_id,
+        courses.number as course_number,
+        courses.name as course_name,
+        terms.slug as term')
+    if workout_id
+      result = result.where("workouts.id = #{workout_id}")
+    end
+
+    return result
+  end
+
+  #~ Private instance methods .................................................
+  private
+
   def set_defaults
-    self.user_id ||= 1
-    self.title ||= " "
-    self.is_public ||= true
-    self.priority ||= 0
-    self.count_attempts ||= 0
-    self.count_correct ||= 0
-    self.difficulty ||= 50
-    self.experience ||= 100
-    self.discrimination ||= 0
-    self.question_type ||= TYPES['Multiple Choice Question']
+    # Update current_version if necessary
+    if !self.current_version
+      self.current_version = self.exercise_versions.first
+    end
+
+    self.question_type ||=
+      (current_version && current_version.prompts.first) ?
+        current_version.question_type : Q_MC
+    self.name ||= ''
+    self.experience ||= 10
+  end
+
+  def progsnap2_main_events_csv(denormalized_data)
+    # MainTable
+    main_attributes = %w{
+      SubjectID
+      ToolInstances
+      ServerTimestamp
+      ServerTimezone
+      CourseID
+      CourseSectionID
+      TermID
+      AssignmentID
+      ProblemID
+      Attempt
+      CodeStateID
+      IsEventOrderingConsistent
+      EventType
+      Score
+      Compile.Result
+      CompileMessageType
+      CompileMessageData
+      EventID
+      Order
+      ParentEventID
+    }
+
+    data = CSV.generate(headers: true) do |csv|
+      event_id = 0
+      csv << main_attributes
+      denormalized_data.each do |submission|
+        attrs = submission.attributes
+        user_id = attrs['user_id'] || 'UNKNOWN'
+        tool_instances = 'Java 8; CodeWorkout'
+        event_ordering_consistent = 'True'
+
+        common_fields = [
+          user_id,
+          tool_instances,
+          attrs['submit_time'].strftime("%Y-%m-%dT%H:%M:%S"),
+          attrs['submit_time'].formatted_offset(false), # +0000
+          attrs['course_number'],
+          attrs['course_offering_id'],
+          attrs['term'],
+          attrs['workout_id'],
+          attrs['exercise_version_id'],
+          attrs['submit_num'],
+          attrs['answer_id'],
+          event_ordering_consistent,
+        ]
+
+        # Run.Program event
+        run_program_event = common_fields + [
+          'Run.Program',
+          attrs['score'],
+          nil, # Compile.Result
+          nil, # CompileMessageType
+          nil, # CompileMessageData
+          event_id,
+          event_id, # Order
+          nil # ParentEventID
+        ]
+
+        csv << run_program_event
+
+        parent_event_id = event_id
+        event_id = event_id + 1
+
+        # Compile event
+        compile_event = common_fields + [
+          'Compile',
+          nil, # no score
+          attrs['error'].nil? ? 'Success' : 'Error',
+          nil, # CompileMessageType
+          nil, # CompileMessageData
+          event_id,
+          event_id, # Order
+          parent_event_id
+        ]
+
+        parent_event_id = event_id
+        event_id = event_id + 1
+
+        csv << compile_event
+
+        # Compile.Error events
+        if attrs['error']
+          errors = attrs['error'].split(/(?=line \d+:)/)
+          errors.each do |e|
+            error_event = common_fields + [
+              'Compile.Error',
+              nil, # no score
+              nil, # Compile.Result
+              'SyntaxError',
+              e,
+              event_id,
+              event_id, # Order
+              parent_event_id
+            ]
+
+            event_id = event_id + 1
+            csv << error_event
+          end
+        end
+      end
+    end
+
+    return data
+  end
+
+  def progsnap2_code_states_csv(denormalized_data)
+    code_state_attributes = %w{
+      CodeStateID
+      Code
+    }
+
+    data = CSV.generate(headers: true) do |csv|
+      csv << code_state_attributes
+      denormalized_data.each do |submission|
+        csv << [
+          submission.attributes['answer_id'],
+          submission.attributes['answer']
+        ]
+      end
+    end
+
+    return data
   end
 end

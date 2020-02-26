@@ -31,6 +31,7 @@ in db/seeds.rb instead.
       - one course offering is set up with the admin and instructor
         as instructors, and all other sample accounts as students
 
+
 Git Practices
 -------------
 Do all work in your own branch, then merge into master when features
@@ -45,5 +46,60 @@ changes to the project:
 After pulling updates from git, be sure to run this to bring the database
 up to speed:
 
-    rake db:reset
     rake db:populate
+
+The db:populate task with reset the database to an empty state with
+the current schema, and then preload it with some sample data.  Use
+"rake db:reset" if you want to go to an empty database without any
+sample data instead.
+
+
+Updating Documentation
+----------------------
+Some documentation is auto-generated.  In model classes, schema comments
+in the model source files show the table structure.  To update those
+comments, use:
+
+    bundle exec annotate
+
+In the root of the project, the erd.pdf file presents an entity relationship
+diagram (ERD) showing the relationships between the model entities.  Diagram
+generation requires graphviz to be installed.  If you have it installed,
+you can update the erd.pdf diagram using:
+
+    rake erd notation=bachman polymporphism=true
+
+
+Basic Code Formatting
+---------------------
++   Read the Ruby style guide:
+
+        https://github.com/bbatsov/ruby-style-guide
+
++   Please use spaces around operators (e.g., "a = 10" instead of "a=10",
+    or "a + b" instead of "a+b").
+
++   Please use spaces after commas (e.g., "function(a, b)" instead of
+    "function(a,b)".
+
++   In comments, please use a space after the comment character, separating
+    it from the first word of the comment.
+
++   In Ruby control constructs, use a space after Ruby keywords like "if"
+    (i.e., "if x == 0", not "if( x == 0 )").  Parentheses are OK, but are
+    not required in conditions.
+
++   Set your editor to automatically trim white space at the ends of lines,
+    and to use only spaces for indentation (indentation step size = 2), and
+    to ensure files end in a newline (i.e., no EOF on a meaningful line of
+    text).
+    --  In Eclipse, go to the Preferences dialog.  Under Aptana Studio->
+        Editors->Ruby, then set tab policy to "use spaces" with a tab size of
+        2.  Then go to Aptana Studio->Editors and check to "remove trailing
+        whitespace characters".
+
++   Keep lines under 80 columns where possible.  Break long lines when possible
+    to do this.
+    --  In Eclipse, go to the Preferences dialog.  Then go to General->
+        Editors->Text Editors, check to show the print margin and set the
+        print margin to 80 columns.

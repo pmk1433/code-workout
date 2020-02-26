@@ -1,0 +1,26 @@
+.container
+  %h1 Download exercise attempt data
+  - if @available_exercises.blank?
+    %p.alert.alert-warning
+      There are no exercises whose attempts you may download.
+  - else
+    %p.text.text-success
+      Click on an exercise to download submission data for it.
+      %br
+      Note that the download might take some time to start, depending on the number of attempts to query.
+    
+    %table.table
+      %thead
+        %tr
+          %th Exercise
+          %th ProgSnap2 Download
+          %th Denormalized Download
+      %tbody
+        - @available_exercises.each do |ex|
+          %tr
+            %td
+              = ex.display_name
+            %td
+              = link_to "", download_exercise_attempt_data_path(id: ex.id, progsnap: true, format: :zip), class: 'fa fa-download'
+            %td
+              = link_to "", download_exercise_attempt_data_path(id: ex.id, progsnap: false, format: :csv), class: 'fa fa-download'
